@@ -1,10 +1,21 @@
 const express = require('express');
 const { Pool } = require('pg');
-// const multer = require('multer');
+const multer = require('multer');
 // const path = require('path');
 
 const app = express();
 app.use(express.json());
+
+const storage = multer.diskStorage(
+  {
+    destination: "public/uploads",
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + path.extname(file.originalname))
+    }
+  }
+)
+
+const upload = multer({ storage })
 
 const pool = new Pool({
   user: 'postgres',
@@ -134,6 +145,27 @@ app.post('/api/mensagens/:anuncioId', async (req, res) => {
 
   res.json({ ok: true });
 });
+
+// ENDPOINT de cadastro de anúncio
+app.post('/api/anuncios', upload.single("imagem"), async (req, res)=>{
+  const { titulo, local, preco, vendedor_id } = req.body
+
+  if (!req.file) return res.status(400).json({erro: "Imagem obrigatória"})
+
+  const { rows } = await pool.query("INSERT INTO anuncios (titulo, local, preco, imagem, vendedor_id) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+  [titulo, local, preco, req.file.filename, vendedor_id])
+
+  return res.status(201).json({mensagem: "Anuncio criado", anuncio: rows[0]})
+})
+
+// ENDPOINT de remoção de anuncio
+app.delete('/api/anuncios/:id', async (req, res) => {
+  const { id } = req.params
+
+  const { rows } = await pool.query("DELETE FROM anuncios WHERE id = $1 RETURNING *", [id])
+
+  return res.status(200).json({ok: "Anuncio excluido", anuncio: rows[0]})
+})
 
 app.listen(3000, () =>
   console.log('Servidor rodando em http://localhost:3000'),
